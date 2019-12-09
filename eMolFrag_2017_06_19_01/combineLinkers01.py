@@ -7,6 +7,7 @@ import os.path
 import shutil
 import subprocess
 from subprocess import Popen,PIPE
+from pymongo import MongoClient
 
 import rdkit
 from rdkit import Chem
@@ -192,17 +193,26 @@ def findFragments(outputDir,mol2File,brickList,linkerList):
     tempSDFName=os.path.basename(mol2File)+'.sdf'
     tempSDFPath=outputDir+'output-sdf/'+tempSDFName
     #print('SDF')
-    sdfInfo=parseSDFFile(tempSDFPath)
+    # sdfInfo=parseSDFFile(tempSDFPath)
+    sdfInfo=parseSDFFile(outputDir + 'temp.sdf')
 
     outputPath_chop_comb=outputDir+'output-chop-comb/'
     outputPath_log=outputDir+'output-log/'
 
-    mol2Info=parseMol2File(mol2File)
+    # mol2Info=parseMol2File(mol2File)
+    mol2Info=parseMol2File(outputDir+'temp.mol2')
     brickAtomList=[]
     for brickFile in brickList:
         brickBaseName=os.path.basename(brickFile)
         destPath=outputPath_chop_comb+brickBaseName
-        shutil.copyfile(brickFile,destPath)
+        # change
+        # shutil.copyfile(brickFile,destPath)
+        with open(brickFile, 'r') as brick_file_in:
+            brick_content = brick_file_in.readlines()
+            client = MongoClient()
+            db = client.eMolFrag
+            collection = db.mol2dchopcomb
+            collection.replace_one({ '_id': brickBaseName }, { '_id': brickBaseName, 'contents': ''.join(brick_content) }, upsert=True)
 
         tempInfo=parseSDFFile(brickFile)
         #print(brickFile)
@@ -221,7 +231,9 @@ def findFragments(outputDir,mol2File,brickList,linkerList):
                 oxygenCount=oxygenCount+1
             else:
                 pass
-        countList=[destPath,atomCount,carbonCount,nitrogCount,oxygenCount]
+        # change
+        # countList=[destPath,atomCount,carbonCount,nitrogCount,oxygenCount]
+        countList=[brickBaseName,atomCount,carbonCount,nitrogCount,oxygenCount]
         writeRLList(outputPath_log+'BrickListAll.txt',countList)
 
 
@@ -413,11 +425,16 @@ def combineLinkers(outputDir,inputFileList):
             for i in range(len(fragmentsList)):
                 fragment=fragmentsList[i]
                 tempFileName='l-'+baseFileName+'-'+str(i).zfill(3)+'.sdf'
-                writeSDFFile(outputFolderPath_chop_comb+tempFileName,fragment)
+                # writeSDFFile(outputFolderPath_chop_comb+tempFileName,fragment)
+                # change
+                client = MongoClient()
+                db = client.eMolFrag
+                collection = db.mol2dchopcomb
+                collection.replace_one({ '_id': tempFileName }, {'_id': tempFileName, 'contents': ''.join(fragment) }, upsert=True)
                 fragmentCount=fragmentsCountList[i]
-
                 #tempStr=tempFileName+' T '+str(fragmentCount[0])+' C '+str(fragmentCount[1])+' N '+str(fragmentCount[2])+' O '+str(fragmentCount[3])+'\n'
-                tempList=[outputFolderPath_chop_comb+tempFileName]+fragmentCount
+                # tempList=[outputFolderPath_chop_comb+tempFileName]+fragmentCount
+                tempList=[tempFileName]+fragmentCount
                 writeRLList(outputFolderPath_log+'LinkerListAll.txt',tempList)
 
 

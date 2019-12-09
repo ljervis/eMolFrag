@@ -19,6 +19,7 @@
 #chopRDKit03.py debug.
 #Last Revision 04/06/2016.
 
+
 from __future__ import print_function
 import sys
 import os
@@ -32,6 +33,8 @@ from rdkit import Chem
 from rdkit.Chem import rdmolops
 from rdkit import RDLogger
 
+from pymongo import MongoClient
+import traceback
 
 from combineLinkers01 import combineLinkers
 
@@ -333,12 +336,13 @@ def ReconnectDoubleBond(parentMol, inputFrags):
 def FragmentSanitize(tempSDFPath):
     try:
         suppl2 = Chem.SDMolSupplier(tempSDFPath,sanitize=True)
+        # newmol2 = Chem.FragmentOnBRICSBonds(tempSDFPath)
         newmol2=Chem.FragmentOnBRICSBonds(suppl2[0])
         mfl=Chem.GetMolFrags(newmol2,asMols=True,sanitizeFrags=False)
-        #print('Good True')
+        print('Good True')
         return mfl
     except:
-        #print('Not good for true')
+        print('Not good for true')
         raise RDKitError(1)
 
 def FragmentUnsantize(suppl1):
@@ -357,8 +361,12 @@ def ChopWithRDKit(outputDir,inputPath):
     lg.setLevel(RDLogger.CRITICAL)
     #print(inputPath)
     #read input from terminal and get file name
-    lig=os.path.basename(inputPath) #file name, no path
 
+    # change
+    # lig=os.path.basename(inputPath) #file name, no path
+    lig = inputPath
+    
+    
     #output folder
 
     output=outputDir+'output-chop/'
@@ -368,13 +376,40 @@ def ChopWithRDKit(outputDir,inputPath):
     outputFolderPath_sdf=outputDir+'output-sdf/'
 
     outputFolderPath_chop_comb=outputDir+'output-chop-comb/'
-    suppl=Chem.MolFromMol2File(inputPath,sanitize=False)
-    tempSDFPath=outputDir+'output-sdf/'+lig+'.sdf'
+    #change
+    client = MongoClient()
+    db = client.eMolFrag
+    collection = db.mol2d
+    result = collection.find({ '_id': inputPath })
+    mol2 = str(result[0]['contents'])
+    with open(outputDir + 'temp.mol2', 'w+') as mol2_file:
+        mol2_file.write(mol2)
+
+    # suppl=Chem.MolFromMol2File(inputPath,sanitize=False)
+    suppl=Chem.MolFromMol2File(outputDir + 'temp.mol2',sanitize=False)
+    # tempSDFPath = Chem.MolFromMol2File(outputDir + 'temp.mol2',sanitize=True)
+    tempSDFPath=outputDir+'temp.sdf'
     w=Chem.SDWriter(tempSDFPath)
     w.SetKekulize(False)
-    w.write(suppl)
-    w.close()
+    try:
+        w.write(suppl)
+        w.close()
+    except:
+        with open(outputFolderPath_log+'errors.txt', 'a+') as file_out:
+            file_out.write('write mol error ' + inputPath + '\n')
+        w.close()
+        return
 
+    # tempSDFPath=outputDir+'output-sdf/'+lig+'.sdf'
+    # w=Chem.SDWriter(tempSDFPath)
+    # w.SetKekulize(False)
+    # try:
+    #     w.write(suppl)
+    #     w.close()
+    # except Exception as e:
+    #     with open(outputFolderPath_log+'errors.txt', 'a+') as file_out:
+    #         file_out.write('write mol error ' + inputPath.split('/')[-1] + '\n')
+    #     return
     try:
         mfl = FragmentSanitize(tempSDFPath)
     except RDKitError:
@@ -433,7 +468,9 @@ def ChopWithRDKit(outputDir,inputPath):
 
     #read atom coordinates and atom type from mol2 file
     mol2AllList=[]
-    with open(inputPath,'r') as inf:
+    # with open(inputPath,'r') as inf:
+        # mol2AllList=inf.readlines()
+    with open(outputDir + 'temp.mol2','r') as inf:
         mol2AllList=inf.readlines()
     mol2AtomInfo=[]
     molHead=mol2AllList.index('@<TRIPOS>ATOM\n')
@@ -470,7 +507,7 @@ def ChopWithRDKit(outputDir,inputPath):
                 bondNum=int(fileHead[0][3:6])
                 atomList=brickInfoList[fileHeadLineNum+1:fileHeadLineNum+atomNum+1]
                 bondList=brickInfoList[fileHeadLineNum+atomNum+1:fileHeadLineNum+atomNum+bondNum+1]
-
+                
                 #Search for atom type
                 atomTypeList=[]
 
@@ -786,5 +823,10 @@ def ChopWithRDKit(outputDir,inputPath):
     tempCombineList=[]
     tempCombineList.append(inputPath)
     tempCombineList=tempCombineList+fileList
-
-    combineLinkers(outputDir,tempCombineList)
+    try:
+        combineLinkers(outputDir,tempCombineList)
+    except Exception as e:
+        track = traceback.format_exc()
+        print(track)
+        with open(outputFolderPath_log+'errors.txt', 'a+') as file_out:
+            file_out.write('combine linkers error ' + inputPath + '\n')

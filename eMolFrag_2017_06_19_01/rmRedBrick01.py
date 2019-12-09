@@ -7,7 +7,9 @@ import os.path
 import subprocess
 from subprocess import Popen,PIPE
 import time
+from molali04 import run
 
+from pymongo import MongoClient
 
 def RmBrickRed(outputPath, tcBorder, inputList):
     pathList=[]
@@ -33,14 +35,27 @@ def RmBrickRed(outputPath, tcBorder, inputList):
                 for mol2 in inputList:
                     if mol2 != mol1:
                         restMolList.append(mol2)
-                aliOutputName=os.path.basename(mol1)+'-alioutput.txt'
+                # aliOutputName=os.path.basename(mol1)+'-alioutput.txt'
+                aliOutputName=mol1+'-alioutput.txt'
                 #final result of molA and appendix
                 finalMolA=[]
                 for molB in restMolList:
-            
                     molA=mol1
+                    # change
+                    client = MongoClient()
+                    db = client.eMolFrag
+                    collection = db.mol2dchopcomb
+                    molA_result = collection.find({ '_id': molA })
+                    molB_result = collection.find({ '_id': molB })
+                    molA_data = molA_result[0]['contents']
+                    molB_data = molB_result[0]['contents']
+                    with open(outputPath + 'molA_temp.sdf', 'w+') as molA_file:
+                        molA_file.write(molA_data)
+                    with open(outputPath + 'molB_temp.sdf', 'w+') as molB_file:
+                        molB_file.write(molB_data)
                     try:
-                        cmd1=Popen([pathList[1], '-A', molA, '-B', molB, '-oAm'],stdout=PIPE)
+                        # cmd1=Popen([pathList[1], '-A', molA, '-B', molB, '-oAm'],stdout=PIPE)
+                        cmd1=Popen([pathList[1], '-A', outputPath + 'molA_temp.sdf', '-B', outputPath + 'molB_temp.sdf', '-oAm'],stdout=PIPE)
                         #cmd1=Popen(['/home/tliu7/apps/pkcombu', '-A', molA, '-B', molB, '-oAm'],stdout=PIPE)
                         #str1=cmd1.communicate()[0]
                         #cmd1.stdout.close()
@@ -65,10 +80,16 @@ def RmBrickRed(outputPath, tcBorder, inputList):
                         alignmentList.append(ali)
                         #aliOutputName=os.path.basename(molA)+'-alioutput.txt'
                         #subprocess.call(['python', '/work/tliu7/run0406/script0406/mol-ali-04.py',outputPath, ali, molA, molB, aliOutputName])
-                        subprocess.call(['python', pathList[0]+'mol-ali-04.py',outputPath, ali, molA, molB, aliOutputName])
+                        # change
+                        # subprocess.call(['python', pathList[0]+'mol-ali-04.py',outputPath, ali, molA, molB, aliOutputName])
+                        run(outputPath, ali, outputPath + 'molA_temp.sdf', outputPath + 'molA_temp.sdf', aliOutputName)
+                        # subprocess.call(['python', pathList[0]+'mol-ali-04.py',outputPath, ali, outputPath + 'molA_temp.sdf', outputPath + 'molA_temp.sdf', aliOutputName])
                         #get file output, then add the info of output to a copy of molA
                         molAList=[]
-                        with open(molA,'r') as inf:
+                        # change
+                        # with open(molA,'r') as inf:
+                        #     molAList=inf.readlines()
+                        with open(outputPath + 'molA_temp.sdf', 'r') as inf:
                             molAList=inf.readlines()
                 
                         appendIHead=list(filter(lambda x: '> <BRANCH @atom-number eligible-atmtype-to-connect>' in x, molAList))
@@ -128,15 +149,21 @@ def RmBrickRed(outputPath, tcBorder, inputList):
 
                     inputFileName=os.path.basename(mol1)
                     outputFilePath=outputPath+'output-brick/'+inputFileName
-                    with open(outputFilePath,'w') as outf:
-                        outf.writelines(finalMolA)
+                    # samumed change
+                    # with open(outputFilePath,'w') as outf:
+                    #     outf.writelines(finalMolA)
                     #finish process molecule molA
 
                 else: # no molecule same to molA or cannot run pkcombu to get result, similar list only contains itself.
                     molA=similarList[0].replace('\n','')
                     molAList=[]
-                    with open(molA,'r') as inf:
-                        molAList=inf.readlines()
+                    # with open(molA,'r') as inf:
+                        # molAList=inf.readlines()
+                    client = MongoClient()
+                    db = client.eMolFrag
+                    collection = db.mol2dchopcomb
+                    molA_result = collection.find({ '_id': molA })
+                    molAList = str(molA_result[0]['contents']).split('\n')
 
                     appendIHead=list(filter(lambda x: '> <BRANCH @atom-number eligible-atmtype-to-connect>' in x, molAList))
                     indAAppendIHead=molAList.index(appendIHead[0])
@@ -151,6 +178,7 @@ def RmBrickRed(outputPath, tcBorder, inputList):
         
                     inputFileName=os.path.basename(mol1)
                     outputFilePath=outputPath+'output-brick/'+inputFileName
+                    # samumed change
                     with open(outputFilePath,'w') as outf:
                         outf.writelines(finalMolA)
                     #finish process molecule molA
@@ -180,8 +208,13 @@ def RmBrickRed(outputPath, tcBorder, inputList):
     elif len(inputList)==1:
         for mol1 in inputList:
             molAList=[]
-            with open(mol1,'r') as inf:
-                molAList=inf.readlines()
+            # with open(mol1,'r') as inf:
+            #     molAList=inf.readlines()
+            client = MongoClient()
+            db = client.eMolFrag
+            collection = db.mol2dchopcomb
+            molA_result = collection.find({ '_id': mol1 })
+            molAList = str(molA_result[0]['contents']).split('\n')
         
             appendIHead=list(filter(lambda x: '> <BRANCH @atom-number eligible-atmtype-to-connect>' in x, molAList))
             indAAppendIHead=molAList.index(appendIHead[0])
@@ -194,8 +227,9 @@ def RmBrickRed(outputPath, tcBorder, inputList):
 
             inputFileName=os.path.basename(mol1)
             outputFilePath=outputPath+'output-brick/'+inputFileName
-            with open(outputFilePath,'w') as outf:
-                outf.writelines(finalMolA)
+            # samumed change
+            # with open(outputFilePath,'w') as outf:
+            #     outf.writelines(finalMolA)
             with open(outputPath+'output-log/bricks-red-out.txt','at') as outf:
                 outf.write(mol1+':'+mol1+'\n')
             with open(outputPath+'output-log/brick-log.txt','at') as outf:
